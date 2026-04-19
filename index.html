@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CNI Member Organizations Map</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #fafafa; color: #111; }
+    header { background: #fff; border-bottom: 1px solid #e5e5e5; padding: 14px 24px; display: flex; align-items: baseline; gap: 12px; }
+    header h1 { font-size: 17px; font-weight: 600; }
+    header span { font-size: 13px; color: #777; }
+    main { max-width: 1100px; margin: 0 auto; padding: 20px 20px 40px; }
+    .controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+    .controls input, .controls select { font-size: 13px; padding: 6px 10px; border-radius: 8px; border: 1px solid #ddd; background: #fff; color: #111; height: 34px; }
+    .controls input { flex: 1; min-width: 180px; }
+    .stats { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+    .stat { background: #f0f0f0; border-radius: 8px; padding: 10px 16px; flex: 1; min-width: 100px; }
+    .stat-label { font-size: 11px; color: #666; margin-bottom: 3px; }
+    .stat-val { font-size: 20px; font-weight: 600; }
+    .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 10px; font-size: 12px; color: #555; }
+    .legend span { display: flex; align-items: center; gap: 5px; }
+    .dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+    #map { height: 500px; width: 100%; border-radius: 10px; border: 1px solid #ddd; margin-bottom: 16px; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 640px; }
+    th { background: #f0f0f0; color: #555; font-weight: 500; padding: 8px 12px; text-align: left; border-bottom: 1px solid #e0e0e0; cursor: pointer; white-space: nowrap; user-select: none; }
+    th:hover { color: #111; background: #e8e8e8; }
+    td { padding: 7px 12px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+    tr:hover td { background: #f9f9f9; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 500; }
+    a.site { color: #185FA5; font-size: 12px; text-decoration: none; }
+    a.site:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>CNI Member Organizations</h1>
+  <span>Coalition for Networked Information &mdash; 229 members</span>
+</header>
+<main>
+
+<div class="controls">
+  <input id="q" type="text" placeholder="Search name or city...">
+  <select id="tf">
+    <option value="">All types</option>
+    <option>University</option>
+    <option>Library / Archive</option>
+    <option>Organization / Consortium</option>
+    <option>Corporation / Publisher</option>
+  </select>
+  <select id="rf">
+    <option value="">All regions</option>
+    <option>Northeast</option>
+    <option>Southeast</option>
+    <option>Midwest</option>
+    <option>West</option>
+    <option>International</option>
+  </select>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="stat-label">Shown</div><div class="stat-val" id="sn">229</div></div>
+  <div class="stat"><div class="stat-label">Avg enrollment</div><div class="stat-val" id="se">—</div></div>
+  <div class="stat"><div class="stat-label">Avg budget</div><div class="stat-val" id="sb">—</div></div>
+  <div class="stat"><div class="stat-label">Regions</div><div class="stat-val" id="sr">—</div></div>
+</div>
+
+<div class="legend">
+  <span><span class="dot" style="background:#378ADD"></span>University</span>
+  <span><span class="dot" style="background:#1D9E75"></span>Library / Archive</span>
+  <span><span class="dot" style="background:#7F77DD"></span>Organization / Consortium</span>
+  <span><span class="dot" style="background:#BA7517"></span>Corporation / Publisher</span>
+</div>
+
+<div id="map"></div>
+
+<div class="table-wrap">
+<table>
+  <thead><tr>
+    <th onclick="sort('name')">Organization</th>
+    <th onclick="sort('type')">Type</th>
+    <th onclick="sort('city')">City</th>
+    <th onclick="sort('students')" style="text-align:right">Students</th>
+    <th onclick="sort('budget')" style="text-align:right">Budget ~$M</th>
+    <th>Website</th>
+  </tr></thead>
+  <tbody id="tb"></tbody>
+</table>
+</div>
+</main>
+
+<script>
+var BADGE = {
+  "University": "background:#E6F1FB;color:#0C447C",
+  "Library / Archive": "background:#EAF3DE;color:#27500A",
+  "Organization / Consortium": "background:#EEEDFE;color:#3C3489",
+  "Corporation / Publisher": "background:#FAEEDA;color:#633806"
+};
+var TC = {
+  "University":"#378ADD",
+  "Library / Archive":"#1D9E75",
+  "Organization / Consortium":"#7F77DD",
+  "Corporation / Publisher":"#BA7517"
+};
+
+var RAW = [
+["1EdTech Consortium","Organization / Consortium","Lake Mary, FL","Southeast",28.757,-81.317,null,15,false,"https://www.1edtech.org"],
+["Alfred P. Sloan Foundation","Organization / Consortium","New York, NY","Northeast",40.754,-73.992,null,100,false,"https://sloan.org"],
+["AM (AAMC)","Organization / Consortium","Washington, DC","Northeast",38.895,-77.037,null,30,false,"https://www.aamc.org"],
+["Amazon Web Services","Corporation / Publisher","Seattle, WA","West",47.622,-122.336,null,null,false,"https://aws.amazon.com"],
+["American Institute of Physics","Organization / Consortium","College Park, MD","Northeast",38.996,-76.938,null,60,false,"https://www.aip.org"],
+["American Library Association","Library / Archive","Chicago, IL","Midwest",41.878,-87.630,null,40,true,"https://www.ala.org"],
+["American University","University","Washington, DC","Northeast",38.937,-77.087,14000,580,true,"https://www.american.edu"],
+["Andrew W. Mellon Foundation","Organization / Consortium","New York, NY","Northeast",40.755,-73.984,null,320,false,"https://mellon.org"],
+["Arizona State University","University","Tempe, AZ","West",33.421,-111.934,140000,3500,true,"https://www.asu.edu"],
+["Atmire","Corporation / Publisher","Leuven, Belgium","International",50.879,4.700,null,null,false,"https://www.atmire.com"],
+["Attain Partners","Corporation / Publisher","McLean, VA","Northeast",38.935,-77.180,null,null,false,"https://www.attainpartners.com"],
+["Auburn University","University","Auburn, AL","Southeast",32.603,-85.484,31000,1100,false,"https://www.auburn.edu"],
+["Augusta University","University","Augusta, GA","Southeast",33.471,-82.011,9500,500,false,"https://www.augusta.edu"],
+["Baylor University","University","Waco, TX","Southeast",31.548,-97.116,20500,800,false,"https://www.baylor.edu"],
+["Big Ten Academic Alliance","Organization / Consortium","Champaign, IL","Midwest",40.117,-88.243,null,5,false,"https://btaa.org"],
+["Bodleian Libraries","Library / Archive","Oxford, UK","International",51.754,-1.254,null,90,false,"https://www.bodleian.ox.ac.uk"],
+["Boston College","University","Chestnut Hill, MA","Northeast",42.335,-71.168,15000,1000,false,"https://www.bc.edu"],
+["Boston University","University","Boston, MA","Northeast",42.350,-71.105,36000,2100,false,"https://www.bu.edu"],
+["Brandeis University","University","Waltham, MA","Northeast",42.367,-71.260,5900,450,false,"https://www.brandeis.edu"],
+["Brigham Young University","University","Provo, UT","West",40.252,-111.649,35000,1200,false,"https://www.byu.edu"],
+["Brown University","University","Providence, RI","Northeast",41.826,-71.403,10700,1600,true,"https://www.brown.edu"],
+["Bryn Mawr College","University","Bryn Mawr, PA","Northeast",40.022,-75.313,1700,170,false,"https://www.brynmawr.edu"],
+["California Institute of Technology","University","Pasadena, CA","West",34.138,-118.125,2200,2500,false,"https://www.caltech.edu"],
+["California Polytechnic State University","University","San Luis Obispo, CA","West",35.299,-120.662,22000,720,false,"https://www.calpoly.edu"],
+["California State University Fullerton","University","Fullerton, CA","West",33.882,-117.885,41000,450,false,"https://www.fullerton.edu"],
+["CSU Office of the Chancellor","Organization / Consortium","Long Beach, CA","West",33.770,-118.193,null,200,true,"https://www.calstate.edu"],
+["California State University San Bernardino","University","San Bernardino, CA","West",34.181,-117.323,20000,330,false,"https://www.csusb.edu"],
+["Carnegie Mellon University","University","Pittsburgh, PA","Northeast",40.443,-79.944,15800,2500,true,"https://www.cmu.edu"],
+["Case Western Reserve University","University","Cleveland, OH","Midwest",41.504,-81.608,12000,1100,true,"https://case.edu"],
+["Central Washington University","University","Ellensburg, WA","West",47.005,-120.537,12000,250,false,"https://www.cwu.edu"],
+["Claremont Colleges Library","Library / Archive","Claremont, CA","West",34.097,-117.711,null,25,false,"https://libraries.claremont.edu"],
+["Clarivate","Corporation / Publisher","Philadelphia, PA","Northeast",39.952,-75.165,null,null,false,"https://clarivate.com"],
+["Clemson University","University","Clemson, SC","Southeast",34.677,-82.836,28000,1000,false,"https://www.clemson.edu"],
+["Colgate University","University","Hamilton, NY","Northeast",42.818,-75.527,3100,250,false,"https://www.colgate.edu"],
+["College of William and Mary","University","Williamsburg, VA","Southeast",37.271,-76.709,9200,450,false,"https://www.wm.edu"],
+["Colorado State University","University","Fort Collins, CO","West",40.575,-105.085,33000,1200,true,"https://www.colostate.edu"],
+["Columbia University","University","New York, NY","Northeast",40.808,-73.962,35000,5400,true,"https://www.columbia.edu"],
+["Cornell University","University","Ithaca, NY","Northeast",42.448,-76.482,25000,4600,true,"https://www.cornell.edu"],
+["Council on Library and Information Resources","Organization / Consortium","Washington, DC","Northeast",38.898,-77.025,null,20,false,"https://www.clir.org"],
+["Crossref","Organization / Consortium","Oxford, UK","International",51.752,-1.251,null,30,false,"https://www.crossref.org"],
+["Dalhousie University Libraries","Library / Archive","Halifax, Canada","International",44.636,-63.592,null,20,false,"https://libraries.dal.ca"],
+["Dartmouth College","University","Hanover, NH","Northeast",43.705,-72.289,7200,1200,false,"https://home.dartmouth.edu"],
+["Duke University","University","Durham, NC","Southeast",36.001,-78.939,17000,3500,false,"https://www.duke.edu"],
+["EBSCO Publishing","Corporation / Publisher","Ipswich, MA","Northeast",42.681,-70.840,null,null,false,"https://www.ebsco.com"],
+["Elsevier Science Publishers","Corporation / Publisher","Amsterdam, Netherlands","International",52.374,4.897,null,null,true,"https://www.elsevier.com"],
+["Emory University","University","Atlanta, GA","Southeast",33.790,-84.324,15000,5000,false,"https://www.emory.edu"],
+["Florida State University","University","Tallahassee, FL","Southeast",30.441,-84.298,45000,1500,false,"https://www.fsu.edu"],
+["Galter Health Sciences Library NW","Library / Archive","Chicago, IL","Midwest",41.897,-87.622,null,15,false,"https://galter.northwestern.edu"],
+["George Mason University","University","Fairfax, VA","Northeast",38.831,-77.313,39000,900,false,"https://www.gmu.edu"],
+["George Washington University","University","Washington, DC","Northeast",38.899,-77.047,28000,1500,true,"https://www.gwu.edu"],
+["Georgetown University","University","Washington, DC","Northeast",38.907,-77.073,20000,1700,true,"https://www.georgetown.edu"],
+["Georgia Institute of Technology","University","Atlanta, GA","Southeast",33.775,-84.397,44000,1800,true,"https://www.gatech.edu"],
+["Georgia State University Library","Library / Archive","Atlanta, GA","Southeast",33.753,-84.386,null,40,false,"https://library.gsu.edu"],
+["Google Books","Corporation / Publisher","Mountain View, CA","West",37.422,-122.084,null,null,false,"https://books.google.com"],
+["Harvard Business School Baker Library","Library / Archive","Boston, MA","Northeast",42.367,-71.121,null,50,false,"https://www.library.hbs.edu"],
+["Harvard University","University","Cambridge, MA","Northeast",42.374,-71.117,23000,6000,true,"https://www.harvard.edu"],
+["Hoover Institution Library & Archives","Library / Archive","Stanford, CA","West",37.427,-122.166,null,60,false,"https://www.hoover.org"],
+["Howard University","University","Washington, DC","Northeast",38.922,-77.020,10000,800,false,"https://home.howard.edu"],
+["Illinois Institute of Technology","University","Chicago, IL","Midwest",41.835,-87.627,8000,350,false,"https://www.iit.edu"],
+["Index Data","Corporation / Publisher","New York, NY","Northeast",40.714,-74.006,null,null,false,"https://www.indexdata.com"],
+["Indiana University","University","Bloomington, IN","Midwest",39.165,-86.527,96000,2200,true,"https://www.iu.edu"],
+["Indiana University Indianapolis","University","Indianapolis, IN","Midwest",39.774,-86.175,28000,600,false,"https://www.iupui.edu"],
+["Inter-American Development Bank","Organization / Consortium","Washington, DC","Northeast",38.892,-77.048,null,null,false,"https://www.iadb.org"],
+["Internet Archive","Library / Archive","San Francisco, CA","West",37.800,-122.473,null,30,false,"https://archive.org"],
+["Internet2","Organization / Consortium","Ann Arbor, MI","Midwest",42.281,-83.748,null,130,false,"https://internet2.edu"],
+["Iowa State University","University","Ames, IA","Midwest",42.027,-93.648,30000,900,true,"https://www.iastate.edu"],
+["ITHAKA","Organization / Consortium","New York, NY","Northeast",40.753,-73.981,null,60,false,"https://www.ithaka.org"],
+["J. Paul Getty Trust","Organization / Consortium","Los Angeles, CA","West",34.076,-118.474,null,200,false,"https://www.getty.edu"],
+["Jisc","Organization / Consortium","Bristol, UK","International",51.455,-2.596,null,200,false,"https://www.jisc.ac.uk"],
+["Johns Hopkins University","University","Baltimore, MD","Northeast",39.329,-76.620,29000,7000,true,"https://www.jhu.edu"],
+["JULAC","Organization / Consortium","Hong Kong","International",22.302,114.177,null,10,false,"https://julac.org"],
+["JSTOR","Organization / Consortium","New York, NY","Northeast",40.748,-73.988,null,60,false,"https://www.jstor.org"],
+["Kansas State University","University","Manhattan, KS","Midwest",39.199,-96.586,21000,600,false,"https://www.k-state.edu"],
+["Kent State University","University","Kent, OH","Midwest",41.153,-81.341,30000,550,true,"https://www.kent.edu"],
+["KAUST","University","Thuwal, Saudi Arabia","International",22.309,39.103,4000,900,false,"https://www.kaust.edu.sa"],
+["Lafayette College Libraries","Library / Archive","Easton, PA","Northeast",40.696,-75.211,null,10,false,"https://libraries.lafayette.edu"],
+["Lehigh University","University","Bethlehem, PA","Northeast",40.606,-75.378,7200,400,false,"https://www.lehigh.edu"],
+["Library of Congress","Library / Archive","Washington, DC","Northeast",38.889,-77.005,null,800,true,"https://www.loc.gov"],
+["Library of Virginia","Library / Archive","Richmond, VA","Southeast",37.538,-77.442,null,25,false,"https://www.lva.virginia.gov"],
+["Los Alamos National Lab Research Library","Library / Archive","Los Alamos, NM","West",35.882,-106.296,null,20,false,"https://library.lanl.gov"],
+["Louisiana State University Libraries","Library / Archive","Baton Rouge, LA","Southeast",30.413,-91.181,null,25,false,"https://www.lib.lsu.edu"],
+["Loyola University Chicago","University","Chicago, IL","Midwest",41.999,-87.659,17000,600,false,"https://www.luc.edu"],
+["LYRASIS","Organization / Consortium","Atlanta, GA","Southeast",33.748,-84.388,null,30,false,"https://www.lyrasis.org"],
+["McMaster University","University","Hamilton, Canada","International",43.261,-79.920,37000,900,false,"https://www.mcmaster.ca"],
+["Michigan State University","University","East Lansing, MI","Midwest",42.703,-84.483,49000,2300,true,"https://msu.edu"],
+["Middle Tennessee State University","University","Murfreesboro, TN","Southeast",35.846,-86.360,23000,400,false,"https://www.mtsu.edu"],
+["Mississippi State University Libraries","Library / Archive","Starkville, MS","Southeast",33.455,-88.788,null,15,false,"https://library.msstate.edu"],
+["Monash University Library","Library / Archive","Melbourne, Australia","International",-37.910,145.134,null,30,false,"https://www.monash.edu/library"],
+["Montana State University","University","Bozeman, MT","West",45.667,-111.050,17000,400,false,"https://www.montana.edu"],
+["National Archives and Records Administration","Library / Archive","College Park, MD","Northeast",38.995,-76.933,null,400,false,"https://www.archives.gov"],
+["National Center for Atmospheric Research","Organization / Consortium","Boulder, CO","West",39.978,-105.275,null,200,false,"https://ncar.ucar.edu"],
+["NIH Library","Library / Archive","Bethesda, MD","Northeast",38.998,-77.103,null,30,false,"https://www.nihlibrary.nih.gov"],
+["National Library of Medicine","Library / Archive","Bethesda, MD","Northeast",39.000,-77.101,null,400,false,"https://www.nlm.nih.gov"],
+["Naval Postgraduate School","University","Monterey, CA","West",36.596,-121.877,2700,250,false,"https://nps.edu"],
+["New York Public Library","Library / Archive","New York, NY","Northeast",40.753,-73.982,null,300,false,"https://www.nypl.org"],
+["New York University","University","New York, NY","Northeast",40.730,-73.997,60000,4000,false,"https://www.nyu.edu"],
+["North Carolina State University","University","Raleigh, NC","Southeast",35.772,-78.674,36000,1500,false,"https://www.ncsu.edu"],
+["Northeastern University","University","Boston, MA","Northeast",42.340,-71.090,22000,1300,false,"https://www.northeastern.edu"],
+["Northwestern University","University","Evanston, IL","Midwest",42.056,-87.676,21000,3200,true,"https://www.northwestern.edu"],
+["Notch8","Corporation / Publisher","Vancouver, Canada","International",49.283,-123.121,null,null,false,"https://notch8.com"],
+["OCLC Inc.","Organization / Consortium","Dublin, OH","Midwest",40.099,-83.115,null,300,true,"https://www.oclc.org"],
+["Ohio State University","University","Columbus, OH","Midwest",40.002,-83.019,61000,3400,true,"https://www.osu.edu"],
+["Ohio University","University","Athens, OH","Midwest",39.323,-82.101,22000,500,false,"https://www.ohio.edu"],
+["Oklahoma State University","University","Stillwater, OK","Southeast",36.126,-97.068,25000,700,false,"https://go.okstate.edu"],
+["Old Dominion University","University","Norfolk, VA","Southeast",36.886,-76.306,24000,500,false,"https://www.odu.edu"],
+["Ontario Council of University Libraries","Organization / Consortium","Toronto, Canada","International",43.651,-79.383,null,15,false,"https://ocul.on.ca"],
+["Oregon State University","University","Corvallis, OR","West",44.564,-123.277,32000,1000,false,"https://oregonstate.edu"],
+["Pacific Northwest National Laboratory","Organization / Consortium","Richland, WA","West",46.342,-119.279,null,900,false,"https://www.pnnl.gov"],
+["Pennsylvania State University","University","University Park, PA","Northeast",40.798,-77.866,96000,3400,true,"https://www.psu.edu"],
+["Princeton Theological Seminary Library","Library / Archive","Princeton, NJ","Northeast",40.354,-74.661,null,10,false,"https://library.ptsem.edu"],
+["Princeton University","University","Princeton, NJ","Northeast",40.344,-74.655,8500,2500,true,"https://www.princeton.edu"],
+["Project MUSE / JHU Press","Organization / Consortium","Baltimore, MD","Northeast",39.330,-76.624,null,20,false,"https://muse.jhu.edu"],
+["Purdue University","University","West Lafayette, IN","Midwest",40.425,-86.912,50000,2100,false,"https://www.purdue.edu"],
+["Queen's University","University","Kingston, Canada","International",44.228,-76.495,26000,700,false,"https://www.queensu.ca"],
+["Rensselaer Polytechnic Institute Libraries","Library / Archive","Troy, NY","Northeast",42.730,-73.681,null,20,false,"https://library.rpi.edu"],
+["Rice University","University","Houston, TX","Southeast",29.717,-95.402,8000,1000,true,"https://www.rice.edu"],
+["Rowan University","University","Glassboro, NJ","Northeast",39.711,-75.116,23000,380,false,"https://www.rowan.edu"],
+["Rutgers University","University","New Brunswick, NJ","Northeast",40.501,-74.447,67000,3000,true,"https://www.rutgers.edu"],
+["Sage Publications","Corporation / Publisher","Thousand Oaks, CA","West",34.170,-118.838,null,null,false,"https://us.sagepub.com"],
+["San Diego State University","University","San Diego, CA","West",32.775,-117.073,36000,600,false,"https://www.sdsu.edu"],
+["SCELC","Organization / Consortium","Los Angeles, CA","West",34.052,-118.244,null,8,false,"https://scelc.org"],
+["Skidmore College","University","Saratoga Springs, NY","Northeast",43.010,-73.776,2600,170,false,"https://www.skidmore.edu"],
+["Smithsonian Institution","Library / Archive","Washington, DC","Northeast",38.889,-77.026,null,900,true,"https://www.si.edu"],
+["Southern Methodist University","University","Dallas, TX","Southeast",32.841,-96.784,12000,800,true,"https://www.smu.edu"],
+["Springer Nature","Corporation / Publisher","New York, NY","Northeast",40.741,-73.989,null,null,false,"https://www.springernature.com"],
+["Stanford University","University","Stanford, CA","West",37.427,-122.169,17000,8000,true,"https://www.stanford.edu"],
+["Stony Brook University","University","Stony Brook, NY","Northeast",40.914,-73.123,26000,1200,false,"https://www.stonybrook.edu"],
+["Syracuse University","University","Syracuse, NY","Northeast",43.038,-76.135,23000,1500,true,"https://www.syracuse.edu"],
+["Taylor & Francis","Corporation / Publisher","London, UK","International",51.514,-0.113,null,null,false,"https://www.taylorandfrancis.com"],
+["Temple University","University","Philadelphia, PA","Northeast",40.104,-75.147,38000,1100,false,"https://www.temple.edu"],
+["Texas A&M University","University","College Station, TX","Southeast",30.613,-96.341,74000,3200,false,"https://www.tamu.edu"],
+["Texas State University","University","San Marcos, TX","Southeast",29.888,-97.940,38000,600,false,"https://www.txst.edu"],
+["Texas Tech University","University","Lubbock, TX","Southeast",33.585,-101.873,40000,700,false,"https://www.ttu.edu"],
+["TIND","Corporation / Publisher","Geneva, Switzerland","International",46.204,6.143,null,null,false,"https://tind.io"],
+["Tufts University","University","Medford, MA","Northeast",42.408,-71.119,13000,1300,false,"https://www.tufts.edu"],
+["Tulane University","University","New Orleans, LA","Southeast",29.940,-90.121,14000,900,false,"https://tulane.edu"],
+["Union College","University","Schenectady, NY","Northeast",42.818,-73.930,2200,160,false,"https://www.union.edu"],
+["US Military Academy Library","Library / Archive","West Point, NY","Northeast",41.390,-73.957,null,20,false,"https://www.usma.edu/library"],
+["Universiteit van Amsterdam","University","Amsterdam, Netherlands","International",52.368,4.905,40000,700,false,"https://www.uva.nl"],
+["University at Albany SUNY","University","Albany, NY","Northeast",42.688,-73.826,18000,500,false,"https://www.albany.edu"],
+["University at Buffalo SUNY","University","Buffalo, NY","Northeast",43.001,-78.787,32000,1000,true,"https://www.buffalo.edu"],
+["University of Alabama","University","Tuscaloosa, AL","Southeast",33.211,-87.540,38000,1200,false,"https://www.ua.edu"],
+["University of Alberta Libraries","Library / Archive","Edmonton, Canada","International",53.523,-113.526,null,40,false,"https://library.ualberta.ca"],
+["University of Arizona","University","Tucson, AZ","West",32.231,-110.954,50000,1700,true,"https://www.arizona.edu"],
+["University of Arkansas","University","Fayetteville, AR","Southeast",36.068,-94.175,28000,800,false,"https://www.uark.edu"],
+["University of British Columbia","University","Vancouver, Canada","International",49.261,-123.246,66000,2500,false,"https://www.ubc.ca"],
+["University of Calgary","University","Calgary, Canada","International",51.077,-114.136,34000,1100,false,"https://www.ucalgary.ca"],
+["University of California Berkeley","University","Berkeley, CA","West",37.872,-122.259,45000,3600,true,"https://www.berkeley.edu"],
+["University of California Davis","University","Davis, CA","West",38.544,-121.750,39000,2800,true,"https://www.ucdavis.edu"],
+["University of California Irvine","University","Irvine, CA","West",33.646,-117.842,37000,2000,true,"https://uci.edu"],
+["University of California Los Angeles","University","Los Angeles, CA","West",34.069,-118.445,46000,4000,true,"https://www.ucla.edu"],
+["University of California Merced","University","Merced, CA","West",37.364,-120.424,9000,400,false,"https://www.ucmerced.edu"],
+["UC Office of the President","Organization / Consortium","Oakland, CA","West",37.804,-122.271,null,500,true,"https://www.ucop.edu"],
+["University of California Riverside","University","Riverside, CA","West",33.973,-117.328,26000,900,false,"https://www.ucr.edu"],
+["University of California San Diego","University","La Jolla, CA","West",32.880,-117.234,42000,4000,true,"https://ucsd.edu"],
+["University of California San Francisco","University","San Francisco, CA","West",37.763,-122.458,3500,6000,true,"https://www.ucsf.edu"],
+["University of California Santa Barbara","University","Santa Barbara, CA","West",34.414,-119.848,26000,1500,true,"https://www.ucsb.edu"],
+["University of California Santa Cruz","University","Santa Cruz, CA","West",36.996,-122.060,19000,900,false,"https://www.ucsc.edu"],
+["University of Chicago","University","Chicago, IL","Midwest",41.789,-87.599,18000,3500,true,"https://www.uchicago.edu"],
+["University of Cincinnati","University","Cincinnati, OH","Midwest",39.132,-84.515,48000,1400,false,"https://www.uc.edu"],
+["University of Colorado Boulder","University","Boulder, CO","West",40.007,-105.265,36000,1600,true,"https://www.colorado.edu"],
+["University of Connecticut","University","Storrs, CT","Northeast",41.808,-72.252,32000,1100,false,"https://uconn.edu"],
+["University of Delaware","University","Newark, DE","Northeast",39.678,-75.751,24000,900,true,"https://www.udel.edu"],
+["University of Denver","University","Denver, CO","West",39.677,-104.962,13000,600,false,"https://www.du.edu"],
+["University of Florida","University","Gainesville, FL","Southeast",29.643,-82.355,55000,2800,false,"https://www.ufl.edu"],
+["University of Georgia","University","Athens, GA","Southeast",33.948,-83.377,40000,1500,false,"https://www.uga.edu"],
+["University of Hawaii","University","Honolulu, HI","West",21.298,-157.818,20000,600,false,"https://www.hawaii.edu"],
+["University of Houston","University","Houston, TX","Southeast",29.719,-95.342,48000,900,false,"https://www.uh.edu"],
+["University of Illinois at Chicago","University","Chicago, IL","Midwest",41.871,-87.649,34000,800,true,"https://www.uic.edu"],
+["University of Illinois Urbana-Champaign","University","Champaign, IL","Midwest",40.103,-88.227,56000,1900,true,"https://illinois.edu"],
+["University of Iowa","University","Iowa City, IA","Midwest",41.661,-91.534,32000,1600,true,"https://uiowa.edu"],
+["University of Kansas","University","Lawrence, KS","Midwest",38.954,-95.252,28000,700,false,"https://www.ku.edu"],
+["University of Kentucky","University","Lexington, KY","Southeast",38.030,-84.504,31000,1200,true,"https://www.uky.edu"],
+["University of Leeds","University","Leeds, UK","International",53.804,-1.555,39000,900,false,"https://www.leeds.ac.uk"],
+["University of Limerick","University","Limerick, Ireland","International",52.674,-8.572,16000,250,false,"https://www.ul.ie"],
+["University of Louisville","University","Louisville, KY","Southeast",38.212,-85.759,23000,900,true,"https://louisville.edu"],
+["University of Manitoba","University","Winnipeg, Canada","International",49.808,-97.134,29000,700,true,"https://umanitoba.ca"],
+["University of Maryland College Park","University","College Park, MD","Northeast",38.988,-76.942,40000,2100,true,"https://www.umd.edu"],
+["University of Massachusetts Amherst","University","Amherst, MA","Northeast",42.386,-72.530,32000,1100,false,"https://www.umass.edu"],
+["University of Miami","University","Coral Gables, FL","Southeast",25.720,-80.278,19000,2600,true,"https://www.miami.edu"],
+["University of Michigan","University","Ann Arbor, MI","Midwest",42.279,-83.733,48000,8500,true,"https://umich.edu"],
+["University of Minnesota","University","Minneapolis, MN","Midwest",44.974,-93.229,55000,3500,true,"https://twin-cities.umn.edu"],
+["University of Mississippi Libraries","Library / Archive","Oxford, MS","Southeast",34.365,-89.538,null,15,false,"https://libraries.olemiss.edu"],
+["University of Missouri","University","Columbia, MO","Midwest",38.951,-92.328,31000,1000,false,"https://www.missouri.edu"],
+["University of Nebraska Lincoln","University","Lincoln, NE","Midwest",40.818,-96.702,25000,800,true,"https://www.unl.edu"],
+["University of Nevada Las Vegas","University","Las Vegas, NV","West",36.108,-115.143,31000,500,false,"https://www.unlv.edu"],
+["University of Nevada Reno","University","Reno, NV","West",39.548,-119.816,20000,600,false,"https://www.unr.edu"],
+["University of New Mexico","University","Albuquerque, NM","West",35.084,-106.619,26000,700,false,"https://www.unm.edu"],
+["University of North Carolina Chapel Hill","University","Chapel Hill, NC","Southeast",35.905,-79.047,31000,3000,false,"https://www.unc.edu"],
+["University of North Texas","University","Denton, TX","Southeast",33.210,-97.148,45000,600,false,"https://www.unt.edu"],
+["University of Northern Iowa","University","Cedar Falls, IA","Midwest",42.514,-92.458,10000,220,false,"https://www.uni.edu"],
+["University of Notre Dame","University","Notre Dame, IN","Midwest",41.706,-86.235,13000,1800,true,"https://www.nd.edu"],
+["University of Oklahoma","University","Norman, OK","Southeast",35.207,-97.444,28000,700,true,"https://www.ou.edu"],
+["University of Oregon","University","Eugene, OR","West",44.046,-123.072,22000,900,true,"https://www.uoregon.edu"],
+["University of Ottawa","University","Ottawa, Canada","International",45.423,-75.683,43000,800,false,"https://www.uottawa.ca"],
+["University of Pennsylvania","University","Philadelphia, PA","Northeast",39.952,-75.193,28000,9000,true,"https://www.upenn.edu"],
+["University of Pittsburgh","University","Pittsburgh, PA","Northeast",40.444,-79.960,35000,2600,true,"https://www.pitt.edu"],
+["University of Regina","University","Regina, Canada","International",50.417,-104.597,15000,250,false,"https://www.uregina.ca"],
+["University of Rochester","University","Rochester, NY","Northeast",43.128,-77.629,12000,2500,true,"https://www.rochester.edu"],
+["University of San Diego Copley Library","Library / Archive","San Diego, CA","West",32.772,-117.189,null,15,false,"https://copley.sandiego.edu"],
+["University of Saskatchewan","University","Saskatoon, Canada","International",52.132,-106.629,26000,700,false,"https://www.usask.ca"],
+["University of South Carolina","University","Columbia, SC","Southeast",33.996,-81.028,36000,1000,false,"https://sc.edu"],
+["University of South Florida","University","Tampa, FL","Southeast",28.062,-82.415,50000,1000,false,"https://www.usf.edu"],
+["University of Southern California","University","Los Angeles, CA","West",34.022,-118.285,48000,4500,false,"https://www.usc.edu"],
+["University of Sydney Library","Library / Archive","Sydney, Australia","International",-33.889,151.187,null,40,false,"https://www.library.usyd.edu.au"],
+["University of Tennessee","University","Knoxville, TN","Southeast",35.955,-83.922,34000,1200,false,"https://www.utk.edu"],
+["University of Tennessee Chattanooga","University","Chattanooga, TN","Southeast",35.052,-85.308,12000,250,false,"https://www.utc.edu"],
+["University of Texas Arlington","University","Arlington, TX","Southeast",32.730,-97.113,43000,700,false,"https://www.uta.edu"],
+["University of Texas Austin","University","Austin, TX","Southeast",30.285,-97.739,51000,3400,true,"https://www.utexas.edu"],
+["University of Texas San Antonio","University","San Antonio, TX","Southeast",29.583,-98.620,34000,550,false,"https://www.utsa.edu"],
+["University of Toronto","University","Toronto, Canada","International",43.662,-79.396,97000,3200,false,"https://www.utoronto.ca"],
+["University of Utah","University","Salt Lake City, UT","West",40.764,-111.841,33000,1600,false,"https://www.utah.edu"],
+["University of Virginia","University","Charlottesville, VA","Southeast",38.036,-78.503,25000,2200,false,"https://www.virginia.edu"],
+["University of Washington","University","Seattle, WA","West",47.655,-122.308,48000,8000,true,"https://www.washington.edu"],
+["University of Waterloo","University","Waterloo, Canada","International",43.469,-80.538,43000,1000,false,"https://uwaterloo.ca"],
+["University of Wisconsin-Madison","University","Madison, WI","Midwest",43.076,-89.411,49000,2900,true,"https://www.wisc.edu"],
+["University of Wyoming","University","Laramie, WY","West",41.315,-105.571,12000,450,false,"https://www.uwyo.edu"],
+["US Government Publishing Office","Library / Archive","Washington, DC","Northeast",38.892,-77.007,null,100,false,"https://www.gpo.gov"],
+["Utah State University","University","Logan, UT","West",41.742,-111.813,28000,600,false,"https://www.usu.edu"],
+["Vanderbilt University","University","Nashville, TN","Southeast",36.145,-86.803,13000,5000,true,"https://www.vanderbilt.edu"],
+["Virginia Commonwealth University","University","Richmond, VA","Southeast",37.548,-77.451,30000,1500,false,"https://www.vcu.edu"],
+["Virginia Tech","University","Blacksburg, VA","Southeast",37.228,-80.423,37000,1500,true,"https://www.vt.edu"],
+["Washington University in St. Louis","University","St. Louis, MO","Midwest",38.648,-90.308,16000,3200,true,"https://wustl.edu"],
+["Wayne State University","University","Detroit, MI","Midwest",42.358,-83.073,27000,700,false,"https://wayne.edu"],
+["Western Michigan University","University","Kalamazoo, MI","Midwest",42.284,-85.616,22000,450,false,"https://wmich.edu"],
+["Whitman College","University","Walla Walla, WA","West",46.073,-118.325,1500,120,false,"https://www.whitman.edu"],
+["Wichita State University Libraries","Library / Archive","Wichita, KS","Midwest",37.718,-97.295,null,12,false,"https://libraries.wichita.edu"],
+["Yale University","University","New Haven, CT","Northeast",41.316,-72.922,14500,5000,false,"https://www.yale.edu"],
+["York University","University","Toronto, Canada","International",43.773,-79.499,55000,800,false,"https://www.yorku.ca"]
+];
+
+var data = RAW.map(function(r){
+  return {name:r[0],type:r[1],city:r[2],region:r[3],lat:r[4],lng:r[5],students:r[6],budget:r[7],charter:r[8],url:r[9]};
+});
+
+var filtered = data.slice();
+var sortCol = "name", sortDir = 1;
+var map, layer;
+
+function initMap(){
+  map = L.map("map", {scrollWheelZoom:false}).setView([30, 10], 2);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 18
+  }).addTo(map);
+  layer = L.layerGroup().addTo(map);
+}
+
+function renderMarkers(){
+  layer.clearLayers();
+  filtered.forEach(function(d){
+    var c = TC[d.type] || "#888";
+    var ic = L.divIcon({
+      html: '<div style="width:10px;height:10px;border-radius:50%;background:'+c+';border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.5);"></div>',
+      className: "", iconSize:[10,10], iconAnchor:[5,5]
+    });
+    var popup = '<div style="font-size:13px;min-width:200px;line-height:1.6;">'
+      + '<div style="font-weight:600;margin-bottom:3px;">'+d.name+'</div>'
+      + '<div style="font-size:11px;color:#777;margin-bottom:6px;">'+d.city+' &bull; '+d.type+'</div>'
+      + '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px;">'
+      + '<span>Students: <b>'+(d.students ? d.students.toLocaleString() : "—")+'</b></span>'
+      + '<span>Budget: <b>'+(d.budget ? "$"+d.budget+"M" : "—")+'</b></span></div>'
+      + '<a href="'+d.url+'" target="_blank" style="font-size:11px;color:#185FA5;">&#8599; '+d.url.replace("https://","")+'</a>'
+      + '</div>';
+    L.marker([d.lat, d.lng], {icon:ic}).addTo(layer).bindPopup(popup);
+  });
+}
+
+function renderStats(){
+  document.getElementById("sn").textContent = filtered.length;
+  var us = filtered.filter(function(d){return d.students!=null;});
+  document.getElementById("se").textContent = us.length ? Math.round(us.reduce(function(a,b){return a+b.students;},0)/us.length).toLocaleString() : "—";
+  var bs = filtered.filter(function(d){return d.budget!=null;});
+  document.getElementById("sb").textContent = bs.length ? "$"+Math.round(bs.reduce(function(a,b){return a+b.budget;},0)/bs.length)+"M" : "—";
+  document.getElementById("sr").textContent = new Set(filtered.map(function(d){return d.region;})).size;
+}
+
+function renderTable(){
+  document.getElementById("tb").innerHTML = filtered.map(function(d){
+    var bs = BADGE[d.type]||"";
+    return '<tr>'
+      +'<td style="font-weight:500;max-width:220px;white-space:normal;">'+d.name+(d.charter?' <span style="font-size:10px;color:#bbb;">&#9733;</span>':'')+'</td>'
+      +'<td><span class="badge" style="'+bs+'">'+d.type+'</span></td>'
+      +'<td style="font-size:11px;color:#777;white-space:nowrap;">'+d.city+'</td>'
+      +'<td style="text-align:right;">'+(d.students!=null?d.students.toLocaleString():"—")+'</td>'
+      +'<td style="text-align:right;">'+(d.budget!=null?"$"+d.budget+"M":"—")+'</td>'
+      +'<td><a class="site" href="'+d.url+'" target="_blank">&#8599; visit</a></td>'
+      +'</tr>';
+  }).join("");
+}
+
+function apply(){
+  var q=document.getElementById("q").value.toLowerCase();
+  var tf=document.getElementById("tf").value;
+  var rf=document.getElementById("rf").value;
+  filtered=data.filter(function(d){
+    if(q && !d.name.toLowerCase().includes(q) && !d.city.toLowerCase().includes(q)) return false;
+    if(tf && d.type!==tf) return false;
+    if(rf && d.region!==rf) return false;
+    return true;
+  });
+  filtered.sort(function(a,b){
+    var av=a[sortCol], bv=b[sortCol];
+    if(av==null) av=sortDir>0?Infinity:-Infinity;
+    if(bv==null) bv=sortDir>0?Infinity:-Infinity;
+    if(typeof av==="string") return sortDir*av.localeCompare(bv);
+    return sortDir*(av-bv);
+  });
+  renderStats(); renderTable(); renderMarkers();
+}
+
+function sort(col){
+  if(sortCol===col) sortDir*=-1; else{sortCol=col;sortDir=1;}
+  apply();
+}
+
+document.getElementById("q").addEventListener("input", apply);
+document.getElementById("tf").addEventListener("change", apply);
+document.getElementById("rf").addEventListener("change", apply);
+
+window.addEventListener("DOMContentLoaded", function(){
+  initMap();
+  apply();
+});
+</script>
+</body>
+</html>
